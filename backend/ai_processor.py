@@ -4,10 +4,11 @@ from datetime import datetime, timedelta
 import google.generativeai as genai
 from config import Config
 
-genai.configure(api_key=Config.GEMINI_API_KEY)
-
 
 def process_meeting_with_ai(transcript, meeting_type, participants):
+    # Configure inside function so key is always loaded
+    genai.configure(api_key=Config.GEMINI_API_KEY)
+    
     today = datetime.now().strftime("%Y-%m-%d")
     participants_str = ", ".join(participants) if participants else "Not specified"
 
@@ -46,9 +47,11 @@ Rules:
 - Return ONLY the JSON. Absolutely nothing else."""
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-flash-latest")
         response = model.generate_content(prompt)
         text = response.text.strip()
+
+        print(f"🤖 Gemini raw response: {text[:200]}")
 
         # Strip markdown code fences if Gemini adds them
         text = re.sub(r'^```json\s*', '', text)
@@ -57,15 +60,16 @@ Rules:
         text = text.strip()
 
         result = json.loads(text)
+        print("✅ AI processing successful")
         return {"success": True, "data": result}
 
     except json.JSONDecodeError as e:
+        print(f"❌ JSON parse error: {e}")
+        print(f"Raw text was: {text}")
         return {"success": False, "error": f"AI returned invalid JSON: {e}", "data": _demo()}
     except Exception as e:
-        err = str(e)
-        if "API_KEY" in err.upper() or "invalid" in err.lower():
-            return {"success": False, "error": "Invalid Gemini API key. Check GEMINI_API_KEY in .env", "data": _demo()}
-        return {"success": False, "error": err, "data": _demo()}
+        print(f"❌ Gemini error: {str(e)}")
+        return {"success": False, "error": str(e), "data": _demo()}
 
 
 def _demo():
@@ -84,15 +88,3 @@ def _demo():
         "meeting_sentiment": "Neutral",
         "topics_discussed": ["Setup", "Configuration"]
     }
-```
-
----
-
-## 🔑 Get Your FREE Gemini API Key (2 minutes, no card)
-
-1. Go to **https://aistudio.google.com/app/apikey**
-2. Sign in with your **Google account**
-3. Click **"Create API Key"**
-4. Copy it → paste into `backend/.env`:
-```
-GEMINI_API_KEY=AIzaSy...your_key_here

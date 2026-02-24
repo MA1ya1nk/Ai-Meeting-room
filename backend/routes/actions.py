@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+from bson import ObjectId
 from database import get_db
 
 actions_bp = Blueprint("actions", __name__)
@@ -11,6 +12,16 @@ def _serialize(doc):
     doc = dict(doc)
     doc["_id"] = str(doc["_id"])
     return doc
+
+
+def _find_by_id(collection, item_id):
+    try:
+        result = collection.find_one({"_id": ObjectId(item_id)})
+        if result:
+            return result
+    except Exception:
+        pass
+    return collection.find_one({"_id": item_id})
 
 
 @actions_bp.route("/actions", methods=["GET"])
@@ -56,11 +67,16 @@ def update_action(action_id):
 
         updates["updated_at"] = datetime.now().isoformat()
 
-        if not db["action_items"].find_one({"_id": action_id}):
+        existing = _find_by_id(db["action_items"], action_id)
+        if not existing:
             return jsonify({"success": False, "error": "Not found"}), 404
 
-        db["action_items"].update_one({"_id": action_id}, {"$set": updates})
-        updated = db["action_items"].find_one({"_id": action_id})
+        try:
+            db["action_items"].update_one({"_id": ObjectId(action_id)}, {"$set": updates})
+        except Exception:
+            db["action_items"].update_one({"_id": action_id}, {"$set": updates})
+
+        updated = _find_by_id(db["action_items"], action_id)
         return jsonify({"success": True, "data": _serialize(updated)}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -70,9 +86,15 @@ def update_action(action_id):
 def delete_action(action_id):
     try:
         db = get_db()
-        if not db["action_items"].find_one({"_id": action_id}):
+        existing = _find_by_id(db["action_items"], action_id)
+        if not existing:
             return jsonify({"success": False, "error": "Not found"}), 404
-        db["action_items"].delete_one({"_id": action_id})
+
+        try:
+            db["action_items"].delete_one({"_id": ObjectId(action_id)})
+        except Exception:
+            db["action_items"].delete_one({"_id": action_id})
+
         return jsonify({"success": True, "message": "Deleted"}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

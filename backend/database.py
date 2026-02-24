@@ -1,21 +1,22 @@
+import uuid
 from pymongo import MongoClient
 from config import Config
 
-_db = None
+_db_instance = None
 
 def get_db():
-    global _db
-    if _db is None:
+    global _db_instance
+    if _db_instance is None:
         try:
             client = MongoClient(Config.MONGODB_URI, serverSelectionTimeoutMS=3000)
             client.server_info()
-            _db = client["meeting_tracker"]
+            _db_instance = client["meeting_tracker"]
             print("✅ MongoDB connected")
         except Exception as e:
             print(f"⚠️  MongoDB unavailable: {e}")
-            print("⚠️  Using in-memory storage (data resets on restart)")
-            _db = InMemoryDB()
-    return _db
+            print("⚠️  Using in-memory storage")
+            _db_instance = InMemoryDB()
+    return _db_instance
 
 
 class InMemoryDB:
@@ -36,7 +37,6 @@ class InMemoryCollection:
         self._data = []
 
     def insert_one(self, doc):
-        import uuid
         doc = dict(doc)
         doc["_id"] = str(uuid.uuid4())
         self._data.append(doc)
@@ -61,10 +61,10 @@ class InMemoryCollection:
             if all(d.get(k) == v for k, v in query.items()):
                 if "$set" in update:
                     d.update(update["$set"])
-                break
-
+                return
+    
     def delete_one(self, query):
         for i, d in enumerate(self._data):
             if all(d.get(k) == v for k, v in query.items()):
                 self._data.pop(i)
-                break
+                return

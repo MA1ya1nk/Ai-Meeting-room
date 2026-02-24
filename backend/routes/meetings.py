@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+from bson import ObjectId
 from database import get_db
 from ai_processor import process_meeting_with_ai
 
@@ -12,6 +13,17 @@ def _serialize(doc):
     doc = dict(doc)
     doc["_id"] = str(doc["_id"])
     return doc
+
+
+def _find_by_id(collection, meeting_id):
+    # Try ObjectId first (MongoDB), fallback to string (in-memory)
+    try:
+        result = collection.find_one({"_id": ObjectId(meeting_id)})
+        if result:
+            return result
+    except Exception:
+        pass
+    return collection.find_one({"_id": meeting_id})
 
 
 @meetings_bp.route("/meetings", methods=["GET"])
@@ -30,18 +42,6 @@ def get_meetings():
             result.append(m)
         result.sort(key=lambda x: x.get("created_at",""), reverse=True)
         return jsonify({"success": True, "data": result}), 200
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@meetings_bp.route("/meetings/<meeting_id>", methods=["GET"])
-def get_meeting(meeting_id):
-    try:
-        db = get_db()
-        m = db["meetings"].find_one({"_id": meeting_id})
-        if not m:
-            return jsonify({"success": False, "error": "Not found"}), 404
-        return jsonify({"success": True, "data": _serialize(m)}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -82,21 +82,41 @@ def process_meeting():
             return jsonify({"success": False, "error": "meeting_id required"}), 400
 
         db = get_db()
-        meeting = db["meetings"].find_one({"_id": meeting_id})
+        meeting = _find_by_id(db["meetings"], meeting_id)
         if not meeting:
             return jsonify({"success": False, "error": "Meeting not found"}), 404
 
-        ai = process_meeting_with_ai(meeting["transcript"], meeting["meeting_type"], meeting.get("participants", []))
+        ai = process_meeting_with_ai(
+            meeting["transcript"],
+            meeting["meeting_type"],
+            meeting.get("participants", [])
+        )
         d = ai["data"]
 
-        db["meetings"].update_one({"_id": meeting_id}, {"$set": {
-            "status": "processed",
-            "ai_summary": d.get("summary", ""),
-            "key_decisions": d.get("key_decisions", []),
-            "topics_discussed": d.get("topics_discussed", []),
-            "meeting_sentiment": d.get("meeting_sentiment", "Neutral"),
-            "processed_at": datetime.now().isoformat(),
-        }})
+        try:
+            db["meetings"].update_one(
+                {"_id": ObjectId(meeting_id)},
+                {"$set": {
+                    "status": "processed",
+                    "ai_summary": d.get("summary", ""),
+                    "key_decisions": d.get("key_decisions", []),
+                    "topics_discussed": d.get("topics_discussed", []),
+                    "meeting_sentiment": d.get("meeting_sentiment", "Neutral"),
+                    "processed_at": datetime.now().isoformat(),
+                }}
+            )
+        except Exception:
+            db["meetings"].update_one(
+                {"_id": meeting_id},
+                {"$set": {
+                    "status": "processed",
+                    "ai_summary": d.get("summary", ""),
+                    "key_decisions": d.get("key_decisions", []),
+                    "topics_discussed": d.get("topics_discussed", []),
+                    "meeting_sentiment": d.get("meeting_sentiment", "Neutral"),
+                    "processed_at": datetime.now().isoformat(),
+                }}
+            )
 
         action_items = []
         for item in d.get("action_items", []):
@@ -127,5 +147,17 @@ def process_meeting():
                 "action_items": action_items,
             }
         }), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@meetings_bp.route("/meetings/<meeting_id>", methods=["GET"])
+def get_meeting(meeting_id):
+    try:
+        db = get_db()
+        m = _find_by_id(db["meetings"], meeting_id)
+        if not m:
+            return jsonify({"success": False, "error": "Not found"}), 404
+        return jsonify({"success": True, "data": _serialize(m)}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

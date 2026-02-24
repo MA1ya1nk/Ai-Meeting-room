@@ -5,7 +5,9 @@ from routes.meetings import meetings_bp
 from routes.actions import actions_bp
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000"])
+
+# Allow both port 3000 and 3001
+CORS(app, origins=["http://localhost:3000", "http://localhost:3001"])
 
 app.register_blueprint(meetings_bp, url_prefix="/api")
 app.register_blueprint(actions_bp, url_prefix="/api")
@@ -28,6 +30,6 @@ def server_error(e):
 
 if __name__ == "__main__":
     print(f"🚀 API running at http://localhost:{Config.FLASK_PORT}")
-    key_set = Config.ANTHROPIC_API_KEY != "your_anthropic_api_key_here"
-    print(f"🔑 API Key: {'Configured ✅' if key_set else 'NOT SET — add to .env ⚠️'}")
+    key_set = Config.GEMINI_API_KEY != "your_gemini_api_key_here"
+    print(f"🔑 API Key: {'Configured ✅' if key_set else 'NOT SET ⚠️'}")
     app.run(debug=True, port=Config.FLASK_PORT)

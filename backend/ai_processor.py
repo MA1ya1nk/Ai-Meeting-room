@@ -1,14 +1,18 @@
 import json
 import re
+import os
 from datetime import datetime, timedelta
+
+from dotenv import load_dotenv
+load_dotenv()
+
 import google.generativeai as genai
-from config import Config
 
 
 def process_meeting_with_ai(transcript, meeting_type, participants):
-    # Configure inside function so key is always loaded
-    genai.configure(api_key=Config.GEMINI_API_KEY)
-    
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    genai.configure(api_key=api_key)
+
     today = datetime.now().strftime("%Y-%m-%d")
     participants_str = ", ".join(participants) if participants else "Not specified"
 
@@ -53,7 +57,6 @@ Rules:
 
         print(f"🤖 Gemini raw response: {text[:200]}")
 
-        # Strip markdown code fences if Gemini adds them
         text = re.sub(r'^```json\s*', '', text)
         text = re.sub(r'^```\s*', '', text)
         text = re.sub(r'\s*```$', '', text)
@@ -65,7 +68,6 @@ Rules:
 
     except json.JSONDecodeError as e:
         print(f"❌ JSON parse error: {e}")
-        print(f"Raw text was: {text}")
         return {"success": False, "error": f"AI returned invalid JSON: {e}", "data": _demo()}
     except Exception as e:
         print(f"❌ Gemini error: {str(e)}")

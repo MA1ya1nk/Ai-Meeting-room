@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
@@ -6,8 +7,7 @@ from routes.actions import actions_bp
 
 app = Flask(__name__)
 
-# Allow both port 3000 and 3001
-CORS(app, origins=["http://localhost:3000", "http://localhost:3001"])
+CORS(app, origins=["*"])
 
 app.register_blueprint(meetings_bp, url_prefix="/api")
 app.register_blueprint(actions_bp, url_prefix="/api")
@@ -29,7 +29,6 @@ def server_error(e):
 
 
 if __name__ == "__main__":
-    print(f"🚀 API running at http://localhost:{Config.FLASK_PORT}")
-    key_set = Config.GEMINI_API_KEY != "your_gemini_api_key_here"
-    print(f"🔑 API Key: {'Configured ✅' if key_set else 'NOT SET ⚠️'}")
-    app.run(debug=True, port=Config.FLASK_PORT)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 API running at http://localhost:{port}")
+    app.run(debug=False, host="0.0.0.0", port=port)

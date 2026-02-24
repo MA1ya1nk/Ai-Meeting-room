@@ -1,0 +1,98 @@
+import json
+import re
+from datetime import datetime, timedelta
+import google.generativeai as genai
+from config import Config
+
+genai.configure(api_key=Config.GEMINI_API_KEY)
+
+
+def process_meeting_with_ai(transcript, meeting_type, participants):
+    today = datetime.now().strftime("%Y-%m-%d")
+    participants_str = ", ".join(participants) if participants else "Not specified"
+
+    prompt = f"""You are an expert meeting analyst. Analyze this {meeting_type} meeting transcript.
+
+Participants: {participants_str}
+Today: {today}
+
+Transcript:
+---
+{transcript}
+---
+
+Return ONLY a raw JSON object. No markdown. No code fences. No explanation. Just the JSON:
+{{
+  "summary": "2-3 sentence summary of the meeting",
+  "key_decisions": ["decision 1", "decision 2"],
+  "action_items": [
+    {{
+      "title": "short action title",
+      "description": "detailed description of what needs to be done",
+      "owner": "person name or Unassigned",
+      "priority": "High or Medium or Low",
+      "due_date": "YYYY-MM-DD",
+      "status": "Pending"
+    }}
+  ],
+  "meeting_sentiment": "Productive or Neutral or Challenging",
+  "topics_discussed": ["topic1", "topic2"]
+}}
+
+Rules:
+- urgent/critical = High priority, soon/next week = Medium, later/eventually = Low
+- If owner not mentioned, use Unassigned
+- If due date not mentioned, default to 7 days from today ({today})
+- Return ONLY the JSON. Absolutely nothing else."""
+
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+
+        # Strip markdown code fences if Gemini adds them
+        text = re.sub(r'^```json\s*', '', text)
+        text = re.sub(r'^```\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+        text = text.strip()
+
+        result = json.loads(text)
+        return {"success": True, "data": result}
+
+    except json.JSONDecodeError as e:
+        return {"success": False, "error": f"AI returned invalid JSON: {e}", "data": _demo()}
+    except Exception as e:
+        err = str(e)
+        if "API_KEY" in err.upper() or "invalid" in err.lower():
+            return {"success": False, "error": "Invalid Gemini API key. Check GEMINI_API_KEY in .env", "data": _demo()}
+        return {"success": False, "error": err, "data": _demo()}
+
+
+def _demo():
+    due = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    return {
+        "summary": "Demo mode — add your Gemini API key to backend/.env to enable AI processing.",
+        "key_decisions": ["Add GEMINI_API_KEY to backend/.env to activate AI"],
+        "action_items": [{
+            "title": "Configure Gemini API Key",
+            "description": "Get a free key from https://aistudio.google.com/app/apikey and add it to backend/.env",
+            "owner": "Developer",
+            "priority": "High",
+            "due_date": due,
+            "status": "Pending"
+        }],
+        "meeting_sentiment": "Neutral",
+        "topics_discussed": ["Setup", "Configuration"]
+    }
+```
+
+---
+
+## 🔑 Get Your FREE Gemini API Key (2 minutes, no card)
+
+1. Go to **https://aistudio.google.com/app/apikey**
+2. Sign in with your **Google account**
+3. Click **"Create API Key"**
+4. Copy it → paste into `backend/.env`:
+```
+GEMINI_API_KEY=AIzaSy...your_key_here

@@ -1,0 +1,21 @@
+# Ignore environment files
+backend/.env
+
+# Ignore node_modules for frontend
+frontend/node_modules/
+
+# Python cache
+backend/__pycache__/
+
+# Ignore logs
+*.log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Ignore VS Code settings
+.vscode/
